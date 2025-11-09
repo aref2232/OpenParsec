@@ -5,10 +5,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:   # enables manual "Run workflow" button
 
 jobs:
-  build-macos-x86:
-    name: Build macOS (x86_64)
+  build-macos-arm:
+    name: Build macOS (arm64)
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -26,11 +27,25 @@ jobs:
           chmod +x scripts/create_parsec_xcframework.sh || true
           ./scripts/create_parsec_xcframework.sh || true
 
-      - name: Build macOS app (x86_64)
+      - name: Build macOS app (arm64)
         run: |
+          set -o pipefail
           xcodebuild -project OpenParsec.xcodeproj \
             -scheme OpenParsec \
             -configuration Release \
-            -destination 'platform=macOS,arch=x86_64' \
+            -destination 'platform=macOS,arch=arm64' \
             ONLY_ACTIVE_ARCH=NO \
             clean build
+
+      - name: Print built apps for debugging
+        run: |
+          find . -type d -name "*.app" -maxdepth 6 -print || true
+          ls -la Frameworks || true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenParsec-macos-build
+          path: |
+            build/Release/*.app
+            Frameworks/ParsecSDK.xcframework
