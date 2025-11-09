@@ -5,47 +5,70 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:   # enables manual "Run workflow" button
+  workflow_dispatch:
 
 jobs:
-  build-macos-arm:
-    name: Build macOS (arm64)
+  build-macos:
+    name: Build macOS
     runs-on: macos-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
 
-      - name: Ensure submodule updated
+      - name: Print environment & Xcode version
         run: |
-          git submodule update --init --remote --depth 1 Frameworks/ParsecSDK.framework || true
+          sw_vers || true
+          xcodebuild -version || true
+          uname -m || true
 
-      - name: Create Parsec xcframework (if possible)
+      - name: Show Parsec submodule contents (diagnostics)
         run: |
-          chmod +x scripts/create_parsec_xcframework.sh || true
+          echo "=== Frameworks directory ==="
+          ls -la Frameworks || true
+          echo "=== ParsecSDK.framework contents (if present) ==="
+          ls -la Frameworks/ParsecSDK.framework || true
+          echo "=== Full recursive listing (short) ==="
+          find Frameworks -maxdepth 4 -print || true
+
+      - name: Make script executable
+        run: chmod +x ./scripts/create_parsec_xcframework.sh || true
+
+      - name: Create Parsec xcframework (best-effort)
+        id: create_xc
+        run: |
+          set -euo pipefail
           ./scripts/create_parsec_xcframework.sh || true
+          echo "script-exit-code:$?" > create_xc_result.txt
+          cat create_xc_result.txt
 
-      - name: Build macOS app (arm64)
+      - name: Build OpenParsec (macOS, let Xcode pick destination)
         run: |
           set -o pipefail
+          # Use macOS SDK and allow Xcode to pick the best destination for the runner
           xcodebuild -project OpenParsec.xcodeproj \
             -scheme OpenParsec \
             -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
+            -sdk macosx \
             ONLY_ACTIVE_ARCH=NO \
             clean build
 
-      - name: Print built apps for debugging
+      - name: Find built app(s) and artifacts (debug)
         run: |
-          find . -type d -name "*.app" -maxdepth 6 -print || true
-          ls -la Frameworks || true
+          echo "Finding .app bundles..."
+          find "${PWD}" -type d -name "*.app" -maxdepth 6 -print || true
+          echo "Looking for ParsecSDK.xcframework..."
+          ls -la Frameworks/ParsecSDK.xcframework || true
+          echo "Looking for any frameworks under Frameworks/ParsecSDK.framework..."
+          find Frameworks/ParsecSDK.framework -maxdepth 3 -print || true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: OpenParsec-macos-build
           path: |
-            build/Release/*.app
+            '**/*.app'
             Frameworks/ParsecSDK.xcframework
+            Frameworks/ParsecSDK.framework/**
