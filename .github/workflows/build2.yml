@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:   # <-- enables the "Run workflow" button in the Actions UI
 
 jobs:
   build-macos-x86:
@@ -35,14 +35,14 @@ jobs:
             -configuration Release \
             -destination 'platform=macOS,arch=x86_64' \
             ONLY_ACTIVE_ARCH=NO \
-            clean build | xcpretty || true
+            clean build
 
-      - name: Find built app & artifacts
+      - name: Print build outputs (for debugging)
         run: |
-          echo "---- find built .app and xcframework ----"
-          find . -type d -name "*.app" -maxdepth 6 || true
+          echo "Built apps:"
+          find . -type d -name "*.app" -maxdepth 6 -print || true
+          echo "Frameworks:"
           ls -la Frameworks || true
-          echo "done"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -50,5 +50,5 @@ jobs:
           name: OpenParsec-macos-build
           path: |
             build/Release/*.app
+            build_parsec/macos/Release/ParsecSDK.framework
             Frameworks/ParsecSDK.xcframework
-            # adjust paths above to match actual locations if necessary
