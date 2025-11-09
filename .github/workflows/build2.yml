@@ -1,0 +1,54 @@
+name: macOS Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-macos-x86:
+    name: Build macOS (x86_64)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Ensure submodule updated
+        run: |
+          git submodule update --init --remote --depth 1 Frameworks/ParsecSDK.framework || true
+
+      - name: Create Parsec xcframework (if possible)
+        run: |
+          chmod +x scripts/create_parsec_xcframework.sh || true
+          ./scripts/create_parsec_xcframework.sh || true
+
+      - name: Build macOS app (x86_64)
+        run: |
+          set -o pipefail
+          xcodebuild -project OpenParsec.xcodeproj \
+            -scheme OpenParsec \
+            -configuration Release \
+            -destination 'platform=macOS,arch=x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
+            clean build | xcpretty || true
+
+      - name: Find built app & artifacts
+        run: |
+          echo "---- find built .app and xcframework ----"
+          find . -type d -name "*.app" -maxdepth 6 || true
+          ls -la Frameworks || true
+          echo "done"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenParsec-macos-build
+          path: |
+            build/Release/*.app
+            Frameworks/ParsecSDK.xcframework
+            # adjust paths above to match actual locations if necessary
