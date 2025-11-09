@@ -1,4 +1,4 @@
-name: macOS Build (CI)
+name: macOS Build (CI-friendly)
 
 on:
   push:
@@ -11,7 +11,6 @@ jobs:
   build-macos:
     name: Build macOS (CI-friendly)
     runs-on: macos-latest
-
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
@@ -19,13 +18,22 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - name: Environment info
+      - name: Environment info & destinations
         run: |
-          sw_vers
-          xcodebuild -version
-          uname -m
-          echo "Available Xcode destinations:"
+          sw_vers || true
+          xcodebuild -version || true
+          uname -m || true
+          echo "Available destinations for scheme:"
           xcodebuild -project OpenParsec.xcodeproj -scheme OpenParsec -showdestinations || true
+
+      - name: Show Parsec submodule contents (diagnostics)
+        run: |
+          echo "=== Frameworks directory ==="
+          ls -la Frameworks || true
+          echo "=== ParsecSDK.framework root listing ==="
+          ls -la Frameworks/ParsecSDK.framework || true
+          echo "=== Recursive listing (short) ==="
+          find Frameworks -maxdepth 4 -print || true
 
       - name: Make xcframework script executable
         run: chmod +x ./scripts/create_parsec_xcframework.sh || true
@@ -35,7 +43,7 @@ jobs:
           set -euo pipefail
           ./scripts/create_parsec_xcframework.sh || true
 
-      - name: Build OpenParsec (unsigned; let Xcode choose destination)
+      - name: Build OpenParsec (unsigned in CI; let Xcode choose destination)
         run: |
           set -o pipefail
           xcodebuild -project OpenParsec.xcodeproj \
@@ -49,13 +57,13 @@ jobs:
             DEVELOPMENT_TEAM="" \
             clean build
 
-      - name: Show build outputs (diagnostics)
+      - name: Show build outputs & artifacts
         run: |
-          echo "Built apps:"
+          echo "Built .app bundles (if any):"
           find . -type d -name "*.app" -maxdepth 6 -print || true
-          echo "Frameworks:"
+          echo "Frameworks directory:"
           ls -la Frameworks || true
-          echo "Parsec xcframework exists:"
+          echo "Parsec xcframework exists?"
           ls -la Frameworks/ParsecSDK.xcframework || true
 
       - name: Upload artifacts
