@@ -1,4 +1,4 @@
-name: macOS Build
+name: macOS Build (CI)
 
 on:
   push:
@@ -9,31 +9,25 @@ on:
 
 jobs:
   build-macos:
-    name: Build macOS (unsigned for CI)
+    name: Build macOS (CI-friendly)
     runs-on: macos-latest
+
     steps:
-      - name: Checkout repository (with submodules)
+      - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
 
-      - name: Print environment & Xcode version
+      - name: Environment info
         run: |
-          sw_vers || true
-          xcodebuild -version || true
-          uname -m || true
+          sw_vers
+          xcodebuild -version
+          uname -m
+          echo "Available Xcode destinations:"
+          xcodebuild -project OpenParsec.xcodeproj -scheme OpenParsec -showdestinations || true
 
-      - name: Show Parsec submodule contents (diagnostics)
-        run: |
-          echo "=== Frameworks directory ==="
-          ls -la Frameworks || true
-          echo "=== ParsecSDK.framework contents (if present) ==="
-          ls -la Frameworks/ParsecSDK.framework || true
-          echo "=== Recursive listing (short) ==="
-          find Frameworks -maxdepth 4 -print || true
-
-      - name: Make script executable
+      - name: Make xcframework script executable
         run: chmod +x ./scripts/create_parsec_xcframework.sh || true
 
       - name: Create Parsec xcframework (best-effort)
@@ -41,11 +35,9 @@ jobs:
           set -euo pipefail
           ./scripts/create_parsec_xcframework.sh || true
 
-      - name: Build OpenParsec (macOS — unsigned in CI)
+      - name: Build OpenParsec (unsigned; let Xcode choose destination)
         run: |
           set -o pipefail
-          # Disable code signing for CI builds so the runner doesn't require a Mac Development cert.
-          # This produces an unsigned app bundle usable for testing. For distribution you must sign & notarize.
           xcodebuild -project OpenParsec.xcodeproj \
             -scheme OpenParsec \
             -configuration Release \
@@ -57,16 +49,16 @@ jobs:
             DEVELOPMENT_TEAM="" \
             clean build
 
-      - name: Find built app(s) and artifacts (debug)
+      - name: Show build outputs (diagnostics)
         run: |
-          echo "Finding .app bundles..."
-          find "${PWD}" -type d -name "*.app" -maxdepth 6 -print || true
-          echo "Looking for ParsecSDK.xcframework..."
+          echo "Built apps:"
+          find . -type d -name "*.app" -maxdepth 6 -print || true
+          echo "Frameworks:"
+          ls -la Frameworks || true
+          echo "Parsec xcframework exists:"
           ls -la Frameworks/ParsecSDK.xcframework || true
-          echo "Looking for any frameworks under Frameworks/ParsecSDK.framework..."
-          find Frameworks/ParsecSDK.framework -maxdepth 3 -print || true
 
-      - name: Upload build artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: OpenParsec-macos-build
